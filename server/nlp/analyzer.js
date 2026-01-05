@@ -1,80 +1,80 @@
-const API_BASE_URL = 'http://localhost:5000/api';
+const tf = require('@tensorflow/tfjs');
+const use = require('@tensorflow-models/universal-sentence-encoder');
 
-export interface GrammarError {
-  type: 'grammar' | 'spelling' | 'style' | 'punctuation' | 'clarity';
-  original: string;
-  suggestion: string;
-  explanation: string;
-  start: number;
-  end: number;
-  alternatives?: string[];
+let model;
+
+async function loadModel() {
+  if (!model) {
+    model = await use.load();
+  }
+  return model;
 }
 
 const grammarRules = [
   {
     pattern: /\btheir\s+is\b/gi,
-    type: 'grammar' as const,
+    type: 'grammar',
     explanation: 'Use "there is" instead of "their is"',
-    getSuggestion: (match: string) => match.replace(/their/i, 'there'),
+    getSuggestion: (match) => match.replace(/their/i, 'there'),
   },
   {
     pattern: /\byour\s+(going|doing|coming)\b/gi,
-    type: 'grammar' as const,
+    type: 'grammar',
     explanation: 'Use "you\'re" (you are) instead of "your"',
-    getSuggestion: (match: string) => match.replace(/your/i, 'you\'re'),
+    getSuggestion: (match) => match.replace(/your/i, 'you\'re'),
   },
   {
     pattern: /\bits\s+a\s+\w+\s+(thing|idea|concept)\b/gi,
-    type: 'clarity' as const,
+    type: 'clarity',
     explanation: 'Consider being more specific',
-    getSuggestion: (match: string) => match,
+    getSuggestion: (match) => match,
     alternatives: ['This is important', 'This matters', 'This is significant'],
   },
   {
     pattern: /\b(very|really|actually)\s+/gi,
-    type: 'style' as const,
+    type: 'style',
     explanation: 'Consider removing filler words for stronger writing',
-    getSuggestion: (match: string) => '',
+    getSuggestion: (match) => '',
   },
   {
     pattern: /\bshould\s+of\b/gi,
-    type: 'grammar' as const,
+    type: 'grammar',
     explanation: 'Use "should have" instead of "should of"',
-    getSuggestion: (match: string) => 'should have',
+    getSuggestion: () => 'should have',
   },
   {
     pattern: /\bcould\s+of\b/gi,
-    type: 'grammar' as const,
+    type: 'grammar',
     explanation: 'Use "could have" instead of "could of"',
-    getSuggestion: (match: string) => 'could have',
+    getSuggestion: () => 'could have',
   },
   {
     pattern: /\balot\b/gi,
-    type: 'spelling' as const,
+    type: 'spelling',
     explanation: 'Correct spelling is "a lot" (two words)',
     getSuggestion: () => 'a lot',
   },
   {
     pattern: /\b(,)\s*([A-Z])/g,
-    type: 'punctuation' as const,
+    type: 'punctuation',
     explanation: 'Consider using a period or semicolon before starting a new sentence',
-    getSuggestion: (match: string) => match.replace(',', '.'),
+    getSuggestion: (match) => match.replace(',', '.'),
   },
   {
     pattern: /\b(However|Therefore|Moreover|Furthermore)\s+/g,
-    type: 'punctuation' as const,
+    type: 'punctuation',
     explanation: 'Transition words at the start of a sentence should be followed by a comma',
-    getSuggestion: (match: string) => match.trim() + ', ',
+    getSuggestion: (match) => match.trim() + ', ',
   },
   {
     pattern: /([.!?])[a-z]/g,
-    type: 'grammar' as const,
+    type: 'grammar',
     explanation: 'Start new sentence with a capital letter',
-    getSuggestion: (match: string) => match.charAt(0) + match.charAt(1).toUpperCase(),
+    getSuggestion: (match) => match.charAt(0) + match.charAt(1).toUpperCase(),
   },
 ];
 
-const synonymDatabase: Record<string, string[]> = {
+const synonymDatabase = {
   good: ['excellent', 'great', 'fine', 'wonderful', 'superb'],
   bad: ['poor', 'unfavorable', 'negative', 'inferior'],
   big: ['large', 'substantial', 'considerable', 'significant'],
@@ -85,27 +85,10 @@ const synonymDatabase: Record<string, string[]> = {
   said: ['stated', 'mentioned', 'remarked', 'expressed', 'noted'],
 };
 
-export async function analyzeText(text: string): Promise<GrammarError[]> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/analyze`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text }),
-    });
-    const data = await response.json();
-    return data.errors || [];
-  } catch (error) {
-    console.error('Error analyzing text:', error);
-    // Fallback to local analysis
-    return localAnalyzeText(text);
-  }
-}
+async function analyzeText(text) {
+  const errors = [];
 
-function localAnalyzeText(text: string): GrammarError[] {
-  const errors: GrammarError[] = [];
-
+  // Regex-based checks
   grammarRules.forEach((rule) => {
     let match;
     const regex = new RegExp(rule.pattern.source, rule.pattern.flags);
@@ -127,6 +110,7 @@ function localAnalyzeText(text: string): GrammarError[] {
     }
   });
 
+  // Synonym suggestions
   const words = text.match(/\b\w+\b/g) || [];
   words.forEach((word) => {
     const lowerWord = word.toLowerCase();
@@ -148,20 +132,18 @@ function localAnalyzeText(text: string): GrammarError[] {
     }
   });
 
+  // NLP-based enhancements (placeholder for now)
+  // In a full implementation, use the model for better suggestions
+
   return errors.sort((a, b) => a.start - b.start);
 }
 
-export function getSynonyms(word: string): string[] {
+async function getSynonyms(word) {
+  // Use Tensorflow.js for better synonyms
+  await loadModel();
+  const embeddings = await model.embed([word]);
+  // For simplicity, return static synonyms; in real implementation, find similar words
   return synonymDatabase[word.toLowerCase()] || [];
 }
 
-export function applySuggestion(
-  text: string,
-  error: GrammarError
-): string {
-  return (
-    text.substring(0, error.start) +
-    error.suggestion +
-    text.substring(error.end)
-  );
-}
+module.exports = { analyzeText, getSynonyms };

@@ -1,5 +1,5 @@
 import { X, Clock, RotateCcw } from 'lucide-react';
-import { DocumentVersion } from '../lib/supabase';
+import type { DocumentVersion } from '../services/api';
 
 interface DocumentHistoryProps {
   versions: DocumentVersion[];
@@ -45,6 +45,7 @@ export function DocumentHistory({ versions, onClose, onRestore }: DocumentHistor
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="Close History"
           >
             <X className="w-5 h-5 text-gray-600" />
           </button>

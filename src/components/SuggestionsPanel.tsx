@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle, Lightbulb, X } from 'lucide-react';
-import { GrammarError } from '../services/grammarChecker';
+import { type GrammarError } from '../services/grammarChecker';
 
 interface SuggestionsPanelProps {
   errors: GrammarError[];
@@ -79,6 +79,7 @@ export function SuggestionsPanel({
               onDismiss(error);
             }}
             className="text-gray-400 hover:text-gray-600 transition-colors"
+            aria-label="Dismiss Suggestion"
           >
             <X className="w-4 h-4" />
           </button>

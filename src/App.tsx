@@ -3,7 +3,11 @@ import { Header } from './components/Header';
 import { TextEditor } from './components/TextEditor';
 import { SuggestionsPanel } from './components/SuggestionsPanel';
 import { DocumentHistory } from './components/DocumentHistory';
-import { analyzeText, applySuggestion, GrammarError } from './services/grammarChecker';
+import { Login } from './components/Login';
+import { analyzeText, applySuggestion } from './services/grammarChecker';
+import { apiService } from './services/api';
+import type { GrammarError } from './services/grammarChecker';
+import type { Document, DocumentVersion } from './services/api';
 
 function App() {
   const [content, setContent] = useState('');
@@ -14,52 +18,48 @@ function App() {
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     checkAuth();
   }, []);
 
-  const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    setIsAuthenticated(!!session);
+  const checkAuth = () => {
+    const token = localStorage.getItem('token');
+    setIsLoggedIn(!!token);
 
-    if (session) {
+    if (token) {
       loadDocument();
     }
   };
 
   const loadDocument = async () => {
-    const { data: documents } = await supabase
-      .from('documents')
-      .select('*')
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (documents) {
-      setCurrentDocument(documents);
-      setTitle(documents.title);
-      setContent(documents.content);
-      loadVersions(documents.id);
+    try {
+      const documents = await apiService.getDocuments();
+      if (documents.length > 0) {
+        const doc = documents[0];
+        setCurrentDocument(doc);
+        setTitle(doc.title);
+        setContent(doc.content);
+        loadVersions(doc._id);
+      }
+    } catch (error) {
+      console.error('Error loading document:', error);
     }
   };
 
   const loadVersions = async (documentId: string) => {
-    const { data } = await supabase
-      .from('document_versions')
-      .select('*')
-      .eq('document_id', documentId)
-      .order('version_number', { ascending: false });
-
-    if (data) {
+    try {
+      const data = await apiService.getVersions(documentId);
       setVersions(data);
+    } catch (error) {
+      console.error('Error loading versions:', error);
     }
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const newErrors = analyzeText(content);
+    const timer = setTimeout(async () => {
+      const newErrors = await analyzeText(content);
       setErrors(newErrors);
     }, 500);
 
@@ -67,7 +67,7 @@ function App() {
   }, [content]);
 
   const handleSave = async () => {
-    if (!isAuthenticated) {
+    if (!isLoggedIn) {
       alert('Please sign in to save documents');
       return;
     }
@@ -76,60 +76,12 @@ function App() {
 
     try {
       if (currentDocument) {
-        const { error: updateError } = await supabase
-          .from('documents')
-          .update({
-            title,
-            content,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', currentDocument.id);
-
-        if (updateError) throw updateError;
-
-        const { data: versions } = await supabase
-          .from('document_versions')
-          .select('version_number')
-          .eq('document_id', currentDocument.id)
-          .order('version_number', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        const nextVersion = (versions?.version_number || 0) + 1;
-
-        await supabase.from('document_versions').insert({
-          document_id: currentDocument.id,
-          content,
-          version_number: nextVersion,
-        });
-
-        loadVersions(currentDocument.id);
+        await apiService.updateDocument(currentDocument._id, title, content);
+        loadVersions(currentDocument._id);
       } else {
-        const { data: session } = await supabase.auth.getSession();
-        if (!session.session) throw new Error('Not authenticated');
-
-        const { data: newDoc, error: insertError } = await supabase
-          .from('documents')
-          .insert({
-            title,
-            content,
-            user_id: session.session.user.id,
-          })
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-        if (newDoc) {
-          setCurrentDocument(newDoc);
-
-          await supabase.from('document_versions').insert({
-            document_id: newDoc.id,
-            content,
-            version_number: 1,
-          });
-
-          loadVersions(newDoc.id);
-        }
+        const newDoc = await apiService.createDocument(title, content);
+        setCurrentDocument(newDoc);
+        loadVersions(newDoc._id);
       }
     } catch (error) {
       console.error('Error saving document:', error);
@@ -158,42 +110,27 @@ function App() {
     setShowHistory(false);
 
     if (currentDocument) {
-      await supabase
-        .from('documents')
-        .update({
-          content: version.content,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', currentDocument.id);
+      await apiService.restoreVersion(currentDocument._id, version._id);
+      await apiService.updateDocument(currentDocument._id, title, version.content);
     }
   };
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">✍️</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">GrammarAI</h1>
-          <p className="text-gray-600 mb-6">
-            Your AI-powered writing assistant for perfect grammar and style
-          </p>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-6">
-            <p className="text-sm text-emerald-800">
-              Demo Mode: Experience the full interface without authentication.
-              All features are available for testing!
-            </p>
-          </div>
-          <button
-            onClick={() => setIsAuthenticated(true)}
-            className="w-full px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
-          >
-            Continue to Demo
-          </button>
-        </div>
-      </div>
-    );
+  const handleLogin = () => {
+    setIsLoggedIn(true);
+    loadDocument();
+  };
+
+  const handleLogout = () => {
+    apiService.logout();
+    setIsLoggedIn(false);
+    setCurrentDocument(null);
+    setVersions([]);
+    setContent('');
+    setTitle('Untitled Document');
+  };
+
+  if (!isLoggedIn) {
+    return <Login onLogin={handleLogin} />;
   }
 
   return (
@@ -203,6 +140,7 @@ function App() {
         onTitleChange={setTitle}
         onSave={handleSave}
         onShowHistory={() => setShowHistory(true)}
+        onLogout={handleLogout}
         isSaving={isSaving}
         errorCount={errors.length}
       />

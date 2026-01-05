@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { GrammarError } from '../services/grammarChecker';
+import { type GrammarError } from '../services/grammarChecker';
 
 interface TextEditorProps {
   content: string;
