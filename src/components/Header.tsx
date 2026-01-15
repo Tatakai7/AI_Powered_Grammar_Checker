@@ -1,11 +1,10 @@
-import { Save, Clock, FileText, LogOut } from 'lucide-react';
+import { Save, Clock, FileText } from 'lucide-react';
 
 interface HeaderProps {
   title: string;
   onTitleChange: (title: string) => void;
   onSave: () => void;
   onShowHistory: () => void;
-  onLogout: () => void;
   isSaving: boolean;
   errorCount: number;
 }
@@ -15,7 +14,6 @@ export function Header({
   onTitleChange,
   onSave,
   onShowHistory,
-  onLogout,
   isSaving,
   errorCount,
 }: HeaderProps) {
@@ -60,14 +58,6 @@ export function Header({
           >
             <Save className="w-4 h-4" />
             {isSaving ? 'Saving...' : 'Save'}
-          </button>
-
-          <button
-            onClick={onLogout}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Logout"
-          >
-            <LogOut className="w-5 h-5 text-gray-600" />
           </button>
         </div>
       </div>

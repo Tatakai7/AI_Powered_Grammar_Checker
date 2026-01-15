@@ -3,7 +3,6 @@ import { Header } from './components/Header';
 import { TextEditor } from './components/TextEditor';
 import { SuggestionsPanel } from './components/SuggestionsPanel';
 import { DocumentHistory } from './components/DocumentHistory';
-import { Login } from './components/Login';
 import { analyzeText, applySuggestion } from './services/grammarChecker';
 import { apiService } from './services/api';
 import type { GrammarError } from './services/grammarChecker';
@@ -18,20 +17,10 @@ function App() {
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [currentDocument, setCurrentDocument] = useState<Document | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    checkAuth();
+    loadDocument();
   }, []);
-
-  const checkAuth = () => {
-    const token = localStorage.getItem('token');
-    setIsLoggedIn(!!token);
-
-    if (token) {
-      loadDocument();
-    }
-  };
 
   const loadDocument = async () => {
     try {
@@ -67,11 +56,6 @@ function App() {
   }, [content]);
 
   const handleSave = async () => {
-    if (!isLoggedIn) {
-      alert('Please sign in to save documents');
-      return;
-    }
-
     setIsSaving(true);
 
     try {
@@ -115,24 +99,6 @@ function App() {
     }
   };
 
-  const handleLogin = () => {
-    setIsLoggedIn(true);
-    loadDocument();
-  };
-
-  const handleLogout = () => {
-    apiService.logout();
-    setIsLoggedIn(false);
-    setCurrentDocument(null);
-    setVersions([]);
-    setContent('');
-    setTitle('Untitled Document');
-  };
-
-  if (!isLoggedIn) {
-    return <Login onLogin={handleLogin} />;
-  }
-
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       <Header
@@ -140,7 +106,6 @@ function App() {
         onTitleChange={setTitle}
         onSave={handleSave}
         onShowHistory={() => setShowHistory(true)}
-        onLogout={handleLogout}
         isSaving={isSaving}
         errorCount={errors.length}
       />
